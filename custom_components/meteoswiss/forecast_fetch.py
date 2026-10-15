@@ -24,6 +24,8 @@ import requests
 from hamsclientfork import meteoSwissClient
 from hamsclientfork.client import JSON_FORECAST_URL
 
+from custom_components.meteoswiss.ogd_forecast import OgdDailyForecast
+
 _LOGGER = logging.getLogger(__name__)
 
 ATTEMPTS = 3
@@ -140,7 +142,24 @@ def fetch_forecast(postcode: int | str) -> dict[str, Any]:
 
 
 class RobustMeteoSwissClient(meteoSwissClient):  # type:ignore[misc]
-    """meteoSwissClient whose forecast download copes with XML answers."""
+    """meteoSwissClient whose forecast download copes with XML answers.
+
+    The daily forecast is taken from MeteoSwiss Open Government Data instead
+    of the app endpoint, see ogd_forecast.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._daily_forecast = OgdDailyForecast(self._postCode)
 
     def get_forecast(self) -> None:
-        self._forecast = fetch_forecast(self._postCode)
+        forecast = fetch_forecast(self._postCode)
+        try:
+            forecast["regionForecast"] = self._daily_forecast.get()
+        except Exception:
+            _LOGGER.warning(
+                "Could not get the daily forecast from MeteoSwiss Open Data, "
+                "using the one from the app endpoint",
+                exc_info=True,
+            )
+        self._forecast = forecast
