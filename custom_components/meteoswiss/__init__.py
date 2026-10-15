@@ -6,7 +6,6 @@ import time
 from typing import Literal, cast
 
 from async_timeout import timeout
-from hamsclientfork import meteoSwissClient
 from hamsclientfork.client import ClientResult
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import CONF_NAME, Platform
@@ -30,6 +29,7 @@ from custom_components.meteoswiss.const import (
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
 )
+from custom_components.meteoswiss.forecast_fetch import RobustMeteoSwissClient
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR, Platform.WEATHER]
@@ -200,7 +200,7 @@ class MeteoSwissDataUpdateCoordinator(DataUpdateCoordinator[MeteoSwissClientResu
                 update_interval,
             )
 
-        self.client = meteoSwissClient(  # type:ignore[no-untyped-call]
+        self.client = RobustMeteoSwissClient(  # type:ignore[no-untyped-call]
             "%s / %s / %s"
             % (
                 forecast_name,
@@ -223,7 +223,8 @@ class MeteoSwissDataUpdateCoordinator(DataUpdateCoordinator[MeteoSwissClientResu
     async def _async_update_data(self) -> MeteoSwissClientResult:
         """Update data via library."""
         try:
-            async with timeout(15):
+            # The forecast may take several attempts, see forecast_fetch.
+            async with timeout(30):
                 data = await self.hass.async_add_executor_job(
                     self.client.get_typed_data,
                 )
